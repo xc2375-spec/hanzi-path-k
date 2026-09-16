@@ -57,3 +57,47 @@ npm run build && npx serve docs
 ## Tech stack
 
 React 18 + TypeScript + Vite + Tailwind CSS. The 500-character dataset (`src/data.json`) is derived from CJKVI-IDS, Unihan, SUBTLEX-CH, Jun Da's Modern Chinese Character Frequency List, HSK 3.0 wordlist, and CC-CEDICT.
+
+---
+
+## 空白頁問題（已修好）
+
+之前發佈上去是空白頁，原因**不在 GitHub 的設定**，在程式本身。
+
+`src/main.tsx` 用了 `<BrowserRouter>`，`src/App.tsx` 只宣告了一條路由 `path="/"`。
+GitHub Pages 把網站放在 `帳號.github.io/hanzi-path-app/` 這個子路徑下，瀏覽器看到的
+路徑是 `/hanzi-path-app/`，跟 `/` 對不上，React Router 就什麼都不 render ——
+**而且不會報任何錯**，所以只看得到一片白。
+
+`vite.config.ts` 裡的 `base: './'` 只修好 CSS／JS 的載入路徑，管不到路由。
+
+修法：這個 app 的三個分頁（Learn / Quiz / Progress）本來就是用 `useState` 切換的，
+從頭到尾沒有用到任何路由功能，所以**把 react-router 整個拿掉**了。
+連帶清掉 35 個沒被 import 的套件（Radix UI、recharts、zod⋯），安裝從 372 個套件
+降到 137 個，打包也小了。
+
+順手刪掉兩個沒人使用的檔案：`src/lib/utils.ts`、`src/hooks/use-mobile.ts`。
+
+## 直接發佈（`docs/` 已經建好了）
+
+這個資料夾裡的 `docs/` 是**現成的建置結果**，不需要在你的電腦上跑任何指令：
+
+1. 把整個資料夾推上 GitHub 的 `main` 分支
+2. **Settings → Pages → Build and deployment**
+   - Source：**Deploy from a branch**
+   - Branch：**main**，資料夾選 **/docs**，Save
+3. 等一兩分鐘，網址是 `https://你的帳號.github.io/hanzi-path-app/`
+
+> `docs/.nojekyll` 這個空檔案不要刪。
+
+已驗證：在子路徑 `/hanzi-path-app/` 底下開啟正常顯示，主控台沒有錯誤，
+Learn / Quiz / Progress 三個分頁與简体／繁體切換都能用。
+
+## 之後改了內容要重新建置
+
+```bash
+npm install     # 第一次才需要
+npm run pages   # 建置 + 更新 docs/ + 補上 .nojekyll，一行搞定
+```
+
+然後 commit、push 就會自動更新。
