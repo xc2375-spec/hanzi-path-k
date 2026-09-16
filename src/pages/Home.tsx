@@ -1,0 +1,121 @@
+import { useMemo, useState } from 'react'
+import data from '../data.json'
+import LearnMode from '../sections/LearnMode'
+import QuizMode from '../sections/QuizMode'
+import ProgressView from '../sections/ProgressView'
+import { loadProgress, saveProgress, type Progress } from '../lib/store'
+
+export interface CharItem {
+  seq: number
+  char: string
+  charT: string
+  pinyin: string
+  level: string
+  strokes: number
+  comp: string
+  compT: string
+  morpheme: string
+  gloss: string
+  words: { w: string; wt: string; g: string }[]
+}
+
+const ALL = data as CharItem[]
+
+export type Script = 'simp' | 'trad'
+type Tab = 'learn' | 'quiz' | 'progress'
+
+export default function Home() {
+  const [tab, setTab] = useState<Tab>('learn')
+  const [script, setScript] = useState<Script>('simp')
+  const [progress, setProgress] = useState<Progress>(loadProgress)
+
+  const update = (fn: (p: Progress) => Progress) => {
+    setProgress(prev => {
+      const next = fn(structuredClone(prev))
+      saveProgress(next)
+      return next
+    })
+  }
+
+  const studiedSet = useMemo(() => new Set(progress.studied), [progress])
+  const current = useMemo(() => {
+    const next = ALL.find(c => !studiedSet.has(c.seq))
+    return next ?? ALL[ALL.length - 1]
+  }, [studiedSet])
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-[var(--line)]">
+        <div className="mx-auto max-w-3xl px-5 pt-8 pb-5">
+          <div className="flex items-baseline justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="font-kai text-4xl tracking-wide">
+                {script === 'simp' ? '汉字学习路径' : '漢字學習路徑'}
+              </h1>
+              <p className="mt-1 text-sm text-[var(--ink-3)]">
+                Learn 500 Chinese characters in an algorithm-optimized order — each character you master unlocks new words.
+              </p>
+            </div>
+            <div className="text-right text-sm text-[var(--ink-3)]">
+              <div>Learned <span className="text-xl font-semibold text-[var(--cinnabar)]">{progress.studied.length}</span> / {ALL.length}</div>
+              <div>Quiz accuracy {progress.quizTotal > 0 ? Math.round(100 * progress.quizCorrect / progress.quizTotal) : 0}%</div>
+            </div>
+          </div>
+          <div className="mt-6 flex items-center justify-between flex-wrap gap-2">
+            <nav className="flex gap-1">
+              {([['learn', 'Learn'], ['quiz', 'Quiz'], ['progress', 'Progress']] as [Tab, string][]).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setTab(k)}
+                  className={`px-5 py-2 text-sm border transition-colors ${
+                    tab === k
+                      ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+                      : 'bg-transparent text-[var(--ink-3)] border-[var(--line)] hover:border-[var(--ink-3)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+            {/* 简繁切换 */}
+            <div className="flex border border-[var(--line)] text-sm" role="group" aria-label="Script">
+              <button
+                onClick={() => setScript('simp')}
+                className={`px-4 py-2 transition-colors ${script === 'simp' ? 'bg-[var(--cinnabar)] text-white' : 'text-[var(--ink-3)] hover:bg-[var(--paper-2)]'}`}>
+                简体
+              </button>
+              <button
+                onClick={() => setScript('trad')}
+                className={`px-4 py-2 transition-colors border-l border-[var(--line)] ${script === 'trad' ? 'bg-[var(--cinnabar)] text-white' : 'text-[var(--ink-3)] hover:bg-[var(--paper-2)]'}`}>
+                繁體
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-3xl px-5 py-8">
+        {tab === 'learn' && (
+          <LearnMode all={ALL} studied={studiedSet} current={current} script={script}
+            onMaster={(seq) => update(p => { if (!p.studied.includes(seq)) p.studied.push(seq); return p })} />
+        )}
+        {tab === 'quiz' && (
+          <QuizMode pool={ALL.filter(c => studiedSet.has(c.seq))}
+            fallback={ALL.slice(0, Math.max(20, progress.studied.length))}
+            studiedCount={progress.studied.length} script={script}
+            onDone={(correct, total) => update(p => {
+              p.quizTotal += total; p.quizCorrect += correct
+              p.history.push({ date: new Date().toISOString().slice(0, 10), correct, total })
+              return p
+            })} />
+        )}
+        {tab === 'progress' && <ProgressView progress={progress} all={ALL} studied={studiedSet} script={script}
+          onReset={() => update(() => ({ studied: [], quizTotal: 0, quizCorrect: 0, history: [] }))} />}
+      </main>
+
+      <footer className="border-t border-[var(--line)] py-6 text-center text-xs text-[var(--ink-3)]">
+        Sequence generated by a multi-criteria dynamic greedy algorithm · Progress is stored in this browser only
+      </footer>
+    </div>
+  )
+}
